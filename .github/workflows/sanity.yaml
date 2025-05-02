@@ -1,4 +1,4 @@
-name: Test action
+name: Sanity test of action
 
 on:
   push:
