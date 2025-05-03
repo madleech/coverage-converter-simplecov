@@ -1,6 +1,6 @@
 # Coverage Converter for Simplecov
 
-This is a simple action that takes (one or more) Simplecov `.resultset.json` files and produces a single combined document.
+This is a simple GitHub action that takes (one or more) Simplecov `.resultset.json` files and produces a single combined document.
 
 ## Usage
 

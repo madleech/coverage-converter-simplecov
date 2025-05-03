@@ -48,8 +48,8 @@ describe('simplecov-converter', () => {
     it('should read and parse JSON files', () => {
       const mockFiles = ['file1.json', 'file2.json'];
       const mockContents = [
-        { coverage: { 'file1.rb': { lines: [1, 1, 1] } } },
-        { coverage: { 'file2.rb': { lines: [1, 0, 1] } } }
+        { one: { coverage: { 'file1.rb': { lines: [1, 1, 1] } } } },
+        { two: { coverage: { 'file2.rb': { lines: [1, 0, 1] } } } }
       ];
 
       fs.readFileSync
@@ -62,33 +62,108 @@ describe('simplecov-converter', () => {
     });
   });
 
+  describe('flattenRuns', () => {
+    it('flattens a single run', () => {
+      const inputs = [{ one: { coverage: { 'file1.rb': { lines: [1, 1, 1] } } } }];
+      const expected = [{'file1.rb': [1, 1, 1]}];
+      const result = logic.flattenRuns(inputs);
+      expect(result).toEqual(expected);
+    })
+
+    it('flattens multiple runs in a single file', () => {
+      const inputs = [{
+        RunOne: { coverage: { 'file1.rb': { lines: [1, 1, 1] } } },
+        RunTwo: { coverage: { 'file1.rb': { lines: [1, 2, 3] } } }
+      }];
+      const expected = [{'file1.rb': [1, 1, 1]}, {'file1.rb': [1, 2, 3]}];
+      const result = logic.flattenRuns(inputs);
+      expect(result).toEqual(expected);
+    })
+
+    it('flattens multiple files', () => {
+      const inputs = [
+        {RunOne: { coverage: { 'file1.rb': { lines: [1, 1, 1] } } }},
+        {RunTwo: { coverage: { 'file1.rb': { lines: [1, 2, 3] } } }}
+      ];
+      const expected = [{'file1.rb': [1, 1, 1]}, {'file1.rb': [1, 2, 3]}];
+      const result = logic.flattenRuns(inputs);
+      expect(result).toEqual(expected);
+    })
+  })
+
+  describe('convertFormat', () => {
+    it('converts format', () => {
+      const input = {coverage: {'file1.rb': {lines: [1, 1, 1]}, 'file2.rb': {lines: [1, 2, 3, 4]}}};
+      const expected = {'file1.rb': [1, 1, 1], 'file2.rb': [1, 2, 3, 4]};
+      const result = logic.convertFormat(input);
+      expect(result).toEqual(expected);
+    })
+  })
+
+  describe('combine', () => {
+    it('combines two test runs', () => {
+      const one = [1, 1, 1];
+      const two = [null, 1, 2];
+      const expected = [1, 2, 3];
+      const result = logic.combine(one, two);
+      expect(result).toEqual(expected);
+    })
+  })
+
+  describe('sum', () => {
+    it('sums the same way as SimpleCov', () => {
+      expect(logic.sum(null, null)).toEqual(null);
+      expect(logic.sum(null, 0)).toEqual(null);
+      expect(logic.sum(0, null)).toEqual(null);
+      expect(logic.sum(0, 0)).toEqual(0);
+      expect(logic.sum(null, 1)).toEqual(1);
+      expect(logic.sum(1, null)).toEqual(1);
+      expect(logic.sum(1, 0)).toEqual(1);
+      expect(logic.sum(0, 1)).toEqual(1);
+      expect(logic.sum(1, 1)).toEqual(2);
+      expect(logic.sum(1, 2)).toEqual(3);
+    })
+  })
+
   describe('merge', () => {
+    it('handles single file', () => {
+      const inputs = [
+        {'file1.rb': [1, 1, 0]},
+      ];
+
+      const expected = {'file1.rb': [1, 1, 0]};
+
+      const result = logic.merge(inputs);
+      expect(result).toEqual(expected);
+    });
+
     it('should merge coverage data from multiple files', () => {
       const inputs = [
+        {'file1.rb': [1, 1, 0]},
+        {'file2.rb': [1, 0, 1]},
+      ];
+
+      const expected = {
+        'file1.rb': [1, 1, 0],
+        'file2.rb': [1, 0, 1],
+      };
+
+      const result = logic.merge(inputs);
+      expect(result).toEqual(expected);
+    });
+
+    it('should merge coverage data from multiple files and runs', () => {
+      const inputs = [
+        {'file1.rb': [1, 1, 0]},
+        {'file2.rb': [1, 0, 1]},
         {
-          'Browser': {
-            coverage: {
-              'file1.rb': { lines: [1, 1, 0] },
-            }
-          },
-          'CI': {
-            coverage: {
-              'file2.rb': { lines: [1, 0, 1 ] }
-            }
-          }
-        },
-        {
-          'RSpec': {
-            coverage: {
-              'file1.rb': { lines: [1, 1, 1] },
-              'file3.rb': { lines: [1, 1, 0] }
-            }
-          }
+          'file1.rb': [1, 1, 1],
+          'file3.rb': [1, 1, 0]
         }
       ];
 
       const expected = {
-        'file1.rb': [1, 1, 1],
+        'file1.rb': [2, 2, 1],
         'file2.rb': [1, 0, 1],
         'file3.rb': [1, 1, 0]
       };
@@ -96,6 +171,18 @@ describe('simplecov-converter', () => {
       const result = logic.merge(inputs);
       expect(result).toEqual(expected);
     });
+
+    it('behaves identically to SimpleCov when combining', () => {
+      const inputs = [
+        {'file1.rb': [null,null,1,null,1,1,1,1,null,1,1,1,null,1,null,1,null,1,0,0,null,null,null,null,1,0,null,null,0,null,0,null,0,null,null,0,null,null,1,0,0,0,null,null,null,null,null]},
+        {'file1.rb': [null,null,1,null,1,1,1,1,null,1,10,1,null,1,null,1,null,1,30,30,null,null,null,null,1,18,null,null,18,null,9,null,9,null,null,18,null,null,1,0,0,0,null,null,null,null,null]}
+      ];
+
+      const expected = {'file1.rb': [null,null,2,null,2,2,2,2,null,2,11,2,null,2,null,2,null,2,30,30,null,null,null,null,2,18,null,null,18,null,9,null,9,null,null,18,null,null,2,0,0,0,null,null,null,null,null]};
+
+      const result = logic.merge(inputs);
+      expect(result).toEqual(expected);
+    })
   });
 
   describe('removePrefixes', () => {

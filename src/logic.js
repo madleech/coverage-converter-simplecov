@@ -13,7 +13,10 @@ function run() {
     const inputs = read(files);
     core.debug(`File contents: ${JSON.stringify(inputs)}`);
 
-    let output = merge(inputs);
+    const flattened = flattenRuns(inputs);
+    core.debug(`Flattened: ${JSON.stringify(flattened)}`);
+
+    let output = merge(flattened);
     core.debug(`Merged coverage: ${JSON.stringify(output)}`);
 
     let prefix = core.getInput('remove-prefix');
@@ -51,31 +54,64 @@ function read(files) {
   return files.map((file) => JSON.parse(fs.readFileSync(file, 'utf8')));
 }
 
-// merge coverage files together
-function merge(inputs) {
-  // Initialize combined coverage data
-  const combinedCoverage = {};
+// a single coverage file may, _in theory_, contain multiple runs, so we flatten:
+//   - from [{<name>: {"coverage": {<file>: {"lines": [lines]}}}}, ...}
+//   - down to [{<file>: [lines]}, ...]
+function flattenRuns(inputs) {
+  const flattenedCoverage = [];
 
-  // Process each coverage file
   for (const data of inputs) {
-    // format is {<name>: {"coverage": {<file>: [lines]}}}
+    // format is {<suite name>: {"coverage": {<file>: {lines: [lines]}}}}
     for (const singleRunCoverageData of Object.values(data)) {
-      // Merge coverage data from each file
-      for (const [filename, lineCoverage] of Object.entries(singleRunCoverageData["coverage"])) {
-        if (!combinedCoverage[filename]) {
-          combinedCoverage[filename] = lineCoverage.lines;
-        } else {
-          // For overlapping files, merge line coverage arrays
-          // If either file has coverage for a line, consider it covered
-          combinedCoverage[filename] = combinedCoverage[filename].map((coverage, index) => {
-            return coverage || (lineCoverage.lines[index] || null);
-          });
-        }
-      }
+      flattenedCoverage.push(convertFormat(singleRunCoverageData));
     }
   }
 
+  return flattenedCoverage;
+}
+
+// convert from {"coverage": {<file>: {"lines": [lines]}}}} to {<file>: [lines]}
+function convertFormat(input) {
+  const output = {};
+  for (const [file, coverage] of Object.entries(input.coverage)) {
+    output[file] = coverage.lines;
+  }
+  return output;
+}
+
+// each input is an array of suite runs
+function merge(inputs) {
+  let combinedCoverage = {};
+  for (let i=0; i<inputs.length; i++) {
+    const one = combinedCoverage;
+    const two = inputs[i];
+    const fileNames1 = Object.keys(one);
+    const fileNames2 = Object.keys(two);
+    const fileNames = [...new Set(fileNames1.concat(fileNames2))];
+
+    for (let fileName of fileNames) {
+      combinedCoverage[fileName] = combine(
+        one[fileName] || [],
+        two[fileName] || []
+      )
+    }
+  }
   return combinedCoverage;
+}
+
+function combine(one, two) {
+  const zipped = [];
+  for (let i=0; i<Math.max(one.length, two.length); i++) {
+    zipped[i] = [one[i], two[i]];
+  }
+  return zipped.map(([a, b]) => sum(a, b));
+}
+
+// see https://github.com/simplecov-ruby/simplecov/blob/main/lib/simplecov/combine/lines_combiner.rb#L32 for logic
+function sum(a, b) {
+  const sum = (a || 0) + (b || 0);
+  if (sum == 0 && (a === null || b === null)) return null;
+  return sum;
 }
 
 // remove common prefix from file patht to convert absolute paths to relative paths
@@ -101,4 +137,4 @@ function write(output) {
   return path;
 }
 
-module.exports = {run, expand, read, merge, removePrefixes, write}
+module.exports = {run, expand, read, flattenRuns, convertFormat, combine, sum, merge, removePrefixes, write}
