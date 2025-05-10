@@ -1,7 +1,7 @@
 {
-  "name": "coverage-annotator",
+  "name": "coverage-converter-simplecov",
   "version": "1.0.0",
-  "description": "GitHub Action for annotating PRs with code coverage information",
+  "description": "GitHub Action for converting Simplecov coverage reports to a simplified JSON format",
   "main": "src/index.js",
   "scripts": {
     "build": "ncc build index.js -o dist",

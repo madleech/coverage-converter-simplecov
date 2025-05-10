@@ -1,5 +1,5 @@
 name: 'Simplecov Coverage Converter'
-description: 'Converts Simplecov code coverage result files into a plain JSON format'
+description: 'Converts Simplecov code coverage result files into a simplified JSON format'
 author: 'Michael Adams'
 
 inputs:

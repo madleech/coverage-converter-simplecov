@@ -218,7 +218,10 @@ describe('simplecov-converter', () => {
     it('should process coverage files successfully', () => {
       const mockPattern = '**/.resultset.json';
       const mockFiles = ['coverage/.resultset.json'];
-      const mockContent = { "RSpec": { coverage: { 'file.rb': { lines: [1, 1, 1] } } } };
+      const mockContent = { "RSpec": { coverage: { 'file.rb': { lines: [1, 2, null] } } } };
+      const expected = {
+        'file.rb': [1, 2, null]
+      }
 
       core.getInput.mockReturnValue(mockPattern);
       glob.sync.mockReturnValue(mockFiles);
@@ -230,7 +233,29 @@ describe('simplecov-converter', () => {
       expect(glob.sync).toHaveBeenCalledWith(mockPattern);
       expect(fs.readFileSync).toHaveBeenCalledWith(mockFiles[0], 'utf8');
       expect(core.setOutput).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalledWith('coverage.json', JSON.stringify(expected, null, 2));
     });
+
+    it('strips github_workspace', () => {
+      const mockPattern = '**/.resultset.json';
+      const mockFiles = ['coverage/.resultset.json'];
+      const mockContent = { "RSpec": { coverage: { '/github/workspace/src/file.rb': { lines: [1, 2, null] } } } };
+      const expected = {
+        'src/file.rb': [1, 2, null]
+      }
+      // mock core.getInput("coverage-file") call
+      core.getInput.mockReturnValueOnce(mockPattern);
+      core.getInput.mockReturnValueOnce('github_workspace');
+      process.env.GITHUB_WORKSPACE = '/github/workspace';
+      glob.sync.mockReturnValue(mockFiles);
+      fs.readFileSync.mockReturnValue(JSON.stringify(mockContent));
+
+      logic.run();
+
+      expect(fs.writeFileSync).toHaveBeenCalledWith('coverage.json', JSON.stringify(expected, null, 2));
+
+      process.env.GITHUB_WORKSPACE = undefined;
+    })
 
     it('should handle errors', () => {
       const error = new Error('Test error');
