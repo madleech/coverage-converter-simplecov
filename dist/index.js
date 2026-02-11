@@ -29109,6 +29109,12 @@ function flattenRuns(inputs) {
   const flattenedCoverage = [];
 
   for (const data of inputs) {
+    if (isFromJsonFormatter(data)) {
+      const lines = replaceIgnoredWithNull(convertFormat(data)); // {<file>: [lines]}
+      flattenedCoverage.push(lines);
+      continue;
+    }
+
     // format is {<suite name>: {"coverage": {<file>: {lines: [lines]}}}}
     for (const singleRunCoverageData of Object.values(data)) {
       flattenedCoverage.push(convertFormat(singleRunCoverageData));
@@ -29118,11 +29124,29 @@ function flattenRuns(inputs) {
   return flattenedCoverage;
 }
 
+// determine if the coverage file was produced by SimpleCov::Formatter::JSONFormatter, or is the
+// internal .resultset.json file that SimpleCov always produces. They have different formats.
+//
+// SimpleCov::Formatter::JSONFormatter has "meta" and "coverage" keys at the top level
+function isFromJsonFormatter(input) {
+  return !!input.meta && !!input.coverage;
+}
+
 // convert from {"coverage": {<file>: {"lines": [lines]}}}} to {<file>: [lines]}
 function convertFormat(input) {
   const output = {};
   for (const [file, coverage] of Object.entries(input.coverage)) {
     output[file] = coverage.lines;
+  }
+  return output;
+}
+
+// SimpleCov::Formatter::JSONFormatter uses "ignored" to indicate that a line was not covered, but we use null for that.
+// replace "ignored" with null
+function replaceIgnoredWithNull(input) {
+  const output = {};
+  for (const [file, lines] of Object.entries(input)) {
+    output[file] = lines.map((line) => line === "ignored" ? null : line);
   }
   return output;
 }
@@ -29185,7 +29209,7 @@ function write(output) {
   return path;
 }
 
-module.exports = {run, expand, read, flattenRuns, convertFormat, combine, sum, merge, removePrefixes, write}
+module.exports = {run, expand, read, flattenRuns, isFromJsonFormatter, convertFormat, replaceIgnoredWithNull, combine, sum, merge, removePrefixes, write}
 
 
 /***/ }),
