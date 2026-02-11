@@ -89,6 +89,27 @@ describe('simplecov-converter', () => {
       const result = logic.flattenRuns(inputs);
       expect(result).toEqual(expected);
     })
+
+    it('flattens a single run from the JSON formatter', () => {
+      const inputs = [{meta: {simplecov_version: '0.22.0'}, coverage: {'file1.rb': {lines: [1, 1, 1]}}}];
+      const expected = [{'file1.rb': [1, 1, 1]}];
+      const result = logic.flattenRuns(inputs);
+      expect(result).toEqual(expected);
+    })
+  })
+
+  describe('isFromJsonFormatter', () => {
+    it('returns true if the input is from the JSON formatter', () => {
+      const input = {meta: {simplecov_version: '0.22.0'}, coverage: {'file1.rb': {lines: [1, 1, 1]}}};
+      const result = logic.isFromJsonFormatter(input);
+      expect(result).toEqual(true);
+    })
+
+    it('returns false if the input is not from the JSON formatter', () => {
+      const input = {RSpec: {coverage: {'file1.rb': {lines: [1, 1, 1]}}}};
+      const result = logic.isFromJsonFormatter(input);
+      expect(result).toEqual(false);
+    })
   })
 
   describe('convertFormat', () => {
@@ -96,6 +117,15 @@ describe('simplecov-converter', () => {
       const input = {coverage: {'file1.rb': {lines: [1, 1, 1]}, 'file2.rb': {lines: [1, 2, 3, 4]}}};
       const expected = {'file1.rb': [1, 1, 1], 'file2.rb': [1, 2, 3, 4]};
       const result = logic.convertFormat(input);
+      expect(result).toEqual(expected);
+    })
+  })
+
+  describe('replaceIgnoredWithNull', () => {
+    it('replaces ignored with null', () => {
+      const input = {'file1.rb': [1, 'ignored', 1]};
+      const expected = {'file1.rb': [1, null, 1]};
+      const result = logic.replaceIgnoredWithNull(input);
       expect(result).toEqual(expected);
     })
   })
@@ -222,6 +252,25 @@ describe('simplecov-converter', () => {
       const expected = {
         'file.rb': [1, 2, null]
       }
+
+      core.getInput.mockReturnValue(mockPattern);
+      glob.sync.mockReturnValue(mockFiles);
+      fs.readFileSync.mockReturnValue(JSON.stringify(mockContent));
+
+      logic.run();
+
+      expect(core.getInput).toHaveBeenCalledWith('coverage-file');
+      expect(glob.sync).toHaveBeenCalledWith(mockPattern);
+      expect(fs.readFileSync).toHaveBeenCalledWith(mockFiles[0], 'utf8');
+      expect(core.setOutput).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalledWith('coverage.json', JSON.stringify(expected, null, 2));
+    });
+
+    it('should process coverage files from the JSON formatter successfully', () => {
+      const mockPattern = '**/coverage.json';
+      const mockFiles = ['coverage/coverage.json'];
+      const mockContent = { meta: { simplecov_version: '0.22.0' }, coverage: { 'file.rb': { lines: [1, 2, "ignored", null] } } };
+      const expected = { 'file.rb': [1, 2, null, null] }
 
       core.getInput.mockReturnValue(mockPattern);
       glob.sync.mockReturnValue(mockFiles);
